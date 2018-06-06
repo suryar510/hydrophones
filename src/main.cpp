@@ -4,8 +4,8 @@ void init_input();
 void init_process();
 void init_output();
 
-const int16_t* input();
-const char* process(const int16_t* const in);
+const float* input();
+const char* process(const float* const in);
 void output(const char* const out);
 
 int main() {
@@ -14,7 +14,7 @@ int main() {
 	init_output();
 
 	while (true) {
-		const int16_t* const in = input();
+		const float* const in = input();
 		const char* const out = process(in);
 		output(out);
 	}

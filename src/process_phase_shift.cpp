@@ -38,7 +38,7 @@ static char out[1024];
 static const size_t len_out = sizeof(out) / sizeof(char);
 static uint64_t iter = 0;
 
-const char* process(const int16_t* const in) {
+const char* process(const float* const in) {
 	size_t out_idx = 0;
 	out[0] = '\0';
 
@@ -49,13 +49,11 @@ const char* process(const int16_t* const in) {
 		for (uint8_t c = 0; c < num_channels; ++c) {
 			const float angle = 2 * M_PI * frequencies[f] * time;
 
-			const float v = float(in[c]) / 32768;
-
 			real[f][c] *= decay;
-			real[f][c] += v * cos(angle) * (1 - decay);
+			real[f][c] += in[c] * cos(angle) * (1 - decay);
 
 			imag[f][c] *= decay;
-			imag[f][c] -= v * sin(angle) * (1 - decay);
+			imag[f][c] -= in[c] * sin(angle) * (1 - decay);
 		}
 	}
 

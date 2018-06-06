@@ -16,20 +16,20 @@ void init_input() {
 
 double randn(double mu, double sigma);
 
-static int16_t v[num_channels];
+static float v[num_channels];
 static uint64_t iter = 0;
 
-const int16_t* input() {
+const float* input() {
 	const float time = float(iter) / sampling_rate;
 	const float time_offset = fmod(time, 2.);
 
-	const float scaling = 32768 / 4;
+	const float scaling = 1. / 4;
 	if (0 < time_offset && time_offset < .004) {
 		for (uint8_t i = 0; i < num_channels; ++i) {
-			float value = sin(2 * M_PI * frequency * (time + coffset[i])) + randn(0, noise);
+			float value = 2 + sin(2 * M_PI * frequency * (time + coffset[i])) + randn(0, noise);
 
-			if (value > 2) value = 2;
-			if (value < -2) value = -2;
+			if (value > 4) value = 4;
+			if (value < 0) value = 0;
 
 			v[i] = value * scaling;
 		}
