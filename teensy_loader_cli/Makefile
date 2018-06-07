@@ -10,14 +10,14 @@ OS ?= LINUX
 
 ifeq ($(OS), LINUX)  # also works on FreeBSD
 CC ?= gcc
-CFLAGS ?= -O2 -Wall
+CFLAGS ?= -O2 -Wall -Iinclude
 teensy_loader_cli: teensy_loader_cli.c
 	$(CC) $(CFLAGS) $(CPPFLAGS) -s -DUSE_LIBUSB -o teensy_loader_cli teensy_loader_cli.c -lusb $(LDFLAGS)
 
 
 else ifeq ($(OS), WINDOWS)
 CC = i586-mingw32msvc-gcc
-CFLAGS ?= -O2 -Wall
+CFLAGS ?= -O2 -Wall -Iinclude
 teensy_loader_cli.exe: teensy_loader_cli.c
 	$(CC) $(CFLAGS) -s -DUSE_WIN32 -o teensy_loader_cli.exe teensy_loader_cli.c -lhid -lsetupapi -lwinmm
 
@@ -25,7 +25,7 @@ teensy_loader_cli.exe: teensy_loader_cli.c
 else ifeq ($(OS), MACOSX)
 ifeq ($(USE_LIBUSB), YES)
 CC ?= gcc
-CFLAGS ?= -O2 -Wall
+CFLAGS ?= -O2 -Wall -Iinclude
 teensy_loader_cli: teensy_loader_cli.c
 	$(CC) $(CFLAGS) -s -DUSE_LIBUSB -DMACOSX -o teensy_loader_cli teensy_loader_cli.c -lusb -I /usr/local/include -L/usr/local/lib
 	 
@@ -36,7 +36,7 @@ SDK ?= $(shell xcrun --show-sdk-path)
 #SDK = /Developer_xcode32/SDKs/MacOSX10.5.sdk  # the very old way!
 #CC = /Developer_xcode32/usr/bin/gcc-4.0
 #CFLAGS = -O2 -Wall -arch i386 -arch ppc
-CFLAGS ?= -O2 -Wall
+CFLAGS ?= -O2 -Wall -Iinclude
 teensy_loader_cli: teensy_loader_cli.c
 ifeq ($(SDK),)
 	$(error SDK was not found. To use this type of compilation please install Xcode)
@@ -47,7 +47,7 @@ endif
 
 else ifeq ($(OS), BSD)  # works on NetBSD and OpenBSD
 CC ?= gcc
-CFLAGS ?= -O2 -Wall
+CFLAGS ?= -O2 -Wall -Iinclude
 teensy_loader_cli: teensy_loader_cli.c
 	$(CC) $(CFLAGS) -s -DUSE_UHID -o teensy_loader_cli teensy_loader_cli.c
 
