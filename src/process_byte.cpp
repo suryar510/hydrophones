@@ -11,6 +11,7 @@ const char* process(const float* const in) {
 	for (size_t i = 0; i < num_channels; ++i) {
 		out[i] = uint8_t(in[i] * 255);
 		if (out[i] == '\n') --out[i];
+		if (out[i] == '\0') ++out[i];
 	}
 	out[num_channels] = '\n';
 	out[num_channels + 1] = '\0';
