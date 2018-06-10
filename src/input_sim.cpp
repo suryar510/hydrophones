@@ -7,40 +7,45 @@
 
 #include "global.hpp"
 
-static float frequency = 30000;
-static float coffset[] = {0, 7e-6, -7e-6, 4.7e-6};
+static uint64_t frequency = 30000;
+static int64_t coffset[] = {0, 7, -7, 5};
 static float noise = 1.;
 
+static constexpr const uint64_t sine_wave_size = 200;
+static float sin_buf[sine_wave_size];
+
 void init_input() {
+	for (uint64_t i = 0; i < sine_wave_size; ++i) {
+		const float angle = 2 * M_PI * i / sine_wave_size;
+		sin_buf[i] = sin(angle);
+	}
 }
 
 double randn(double mu, double sigma);
 
 static float v[num_channels];
-static uint64_t iter = 0;
+static uint64_t iter = sampling_rate;
 
 const float* input() {
-	const float time = float(iter) / sampling_rate;
-	const float time_offset = fmod(time, 2.);
+	const uint64_t time = iter * 1000000 / sampling_rate; // in uc
+	const uint64_t time_offset = time % 2000000;
 
-	const float scaling = 1. / 4;
-	if (0 < time_offset && time_offset < .004) {
+	if (0 <= time_offset && time_offset < 4000) {
 		for (uint8_t i = 0; i < num_channels; ++i) {
-			float value = 2 + sin(2 * M_PI * frequency * (time + coffset[i])) + randn(0, noise);
+			float value = 2 + sin_buf[(frequency * (time + coffset[i]) % 1000000) * sine_wave_size / 1000000] + randn(0, noise);
 
 			if (value > 4) value = 4;
 			if (value < 0) value = 0;
 
-			v[i] = value * scaling;
+			v[i] = value / 4;
 		}
 	}
 	else {
 		for (uint8_t i = 0; i < num_channels; ++i)
-			v[i] = randn(0, noise) * scaling;
+			v[i] = randn(0, noise) / 4;
 	}
 
 	++iter;
-	if (iter >= 2 * sampling_rate) iter = 0;
 
 	return v;
 }
