@@ -3,9 +3,11 @@
 #include <math.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <string.h>
 
 #include "global.hpp"
 #include "fxpt_atan2.hpp"
+#include "dspinst.hpp"
 
 // times are in uint64_t (micros)
 // voltages are in uint16_t (0 - 2^16)
@@ -37,8 +39,8 @@ static int32_t cos_buf[sine_wave_size];
 void init_process() {
 	for (uint64_t i = 0; i < sine_wave_size; ++i) {
 		const float angle = 2 * M_PI * i / sine_wave_size;
-		sin_buf[i] = sin(angle) * 256 * 256;
-		cos_buf[i] = cos(angle) * 256 * 256;
+		sin_buf[i] = sin(angle) * B16;
+		cos_buf[i] = cos(angle) * B16;
 	}
 }
 
@@ -67,8 +69,8 @@ const char* process(const uint16_t* const in) {
 		const uint64_t microrevs = frequencies[f] * time % 1000000; // angle = 2pi * microrevs / 1000000
 		const uint64_t wave_idx = microrevs * sine_wave_size / 1000000;
 		for (uint8_t c = 0; c < num_channels; ++c) {
-			real[f][c] = (real[f][c] * alpha + in[c] * sin_buf[wave_idx] / B16 * beta) / B16;
-			imag[f][c] = (imag[f][c] * alpha - in[c] * cos_buf[wave_idx] / B16 * beta) / B16;
+			real[f][c] = (real[f][c] * alpha + signed_multiply_32x16b(sin_buf[wave_idx], in[c]) * beta) / B16;
+			imag[f][c] = (imag[f][c] * alpha - signed_multiply_32x16b(cos_buf[wave_idx], in[c]) * beta) / B16;
 		}
 	}
 
@@ -81,17 +83,15 @@ const char* process(const uint16_t* const in) {
 
 			uint64_t min_amplitude = -1;
 			for (uint8_t c = 0; c < num_channels; ++c) {
-				const uint64_t amplitude = uint64_t(int64_t(real[f][c]) * int64_t(real[f][c])) + uint64_t(int64_t(imag[f][c]) * int64_t(imag[f][c]));
+				const uint64_t amplitude = uint64_t(real[f][c] * real[f][c]) + uint64_t(imag[f][c] * imag[f][c]);
 				if (amplitude < min_amplitude) min_amplitude = amplitude;
 			}
 
 			if (min_amplitude > max_amplitude[f]) {
 				max_amplitude[f] = min_amplitude;
 				max_time[f] = time;
-				for (uint8_t c = 0; c < num_channels; ++c) {
-					max_real[f][c] = real[f][c];
-					max_imag[f][c] = imag[f][c];
-				}
+				memcpy(max_real[f], real[f], sizeof(real[f]));
+				memcpy(max_imag[f], imag[f], sizeof(imag[f]));
 			}
 
 			// if highest in time window, report
@@ -102,8 +102,8 @@ const char* process(const uint16_t* const in) {
 					uint32_t phase = fxpt_atan2(max_imag[f][c], max_real[f][c]);
 					int32_t phase_shift = int32_t(phase) - base_phase;
 
-					while (phase_shift < -B16 / 2) phase_shift += B16;
-					while (phase_shift >= B16 / 2) phase_shift -= B16;
+					if (phase_shift < -B16 / 2) phase_shift += B16;
+					if (phase_shift >= B16 / 2) phase_shift -= B16;
 
 					const int64_t time_diff = int64_t(phase_shift) * 1000000000 / B16 / int64_t(frequencies[f]); // in nanos
 
