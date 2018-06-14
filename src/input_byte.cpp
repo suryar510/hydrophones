@@ -6,13 +6,13 @@
 void init_input() {
 }
 
-float data[num_channels];
+uint16_t data[num_channels];
 
-const float* input() {
+const uint16_t* input() {
 	while (getchar() != '\n');
 
 	for (size_t i = 0; i < num_channels; ++i)
-		data[i] = float(uint8_t(getchar())) / 256;
+		data[i] = getchar() << 4;
 
 	return data;
 }

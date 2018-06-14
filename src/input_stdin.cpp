@@ -7,15 +7,15 @@
 void init_input() {
 }
 
-float data[num_channels];
+uint16_t data[num_channels];
 
-const float* input() {
+const uint16_t* input() {
 	while (true) {
 		while (getchar() != '\n');
 
 		bool failed = false;
 		for (size_t i = 0; i < num_channels; ++i)
-			failed = failed || scanf(" %f", &data[i]) != 1;
+			failed = failed || scanf(" %" SCNu16, &data[i]) != 1;
 
 		if (!failed) return data;
 	}

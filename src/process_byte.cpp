@@ -7,9 +7,9 @@ void init_process() {
 
 char out[num_channels + 2];
 
-const char* process(const float* const in) {
+const char* process(const uint16_t* const in) {
 	for (size_t i = 0; i < num_channels; ++i) {
-		out[i] = uint8_t(in[i] * 255);
+		out[i] = in[i] >> 4;
 		if (out[i] == '\n') --out[i];
 		if (out[i] == '\0') ++out[i];
 	}
