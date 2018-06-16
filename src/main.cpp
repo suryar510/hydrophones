@@ -1,11 +1,13 @@
 #include <stdint.h>
 
+#include "global.hpp"
+
 void init_input();
 void init_process();
 void init_output();
 
-const uint16_t* input();
-const char* process(const uint16_t* const in);
+int16_t (*input())[block_size];
+const char* process(int16_t (* const in)[block_size]);
 void output(const char* const out);
 
 int main() {
@@ -14,7 +16,7 @@ int main() {
 	init_output();
 
 	while (true) {
-		const uint16_t* const in = input();
+		int16_t (* const in)[block_size] = input();
 		const char* const out = process(in);
 		output(out);
 	}

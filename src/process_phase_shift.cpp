@@ -10,17 +10,13 @@
 #include "dspinst.hpp"
 
 // times are in uint64_t (micros)
-// voltages are in uint16_t (0 - 2^16)
-// fourier transform is in int32_t (-2^16 - 2^16)
-// squared amplitude is in uint64_t (0 - 2^64)
-// phase is in int32_t
 // time diff is in int64_t (nanos)
 
+static constexpr const int16_t B8 = 1 << 8;
 static constexpr const int32_t B16 = 1 << 16;
 
-static constexpr const int32_t alpha = B16 * .99;
 static constexpr const uint64_t window = 1996000; // in us
-static constexpr const uint32_t threshold = .0;
+static constexpr const uint32_t threshold = 0;
 
 static const uint64_t frequencies[] = {
 	//25000,
@@ -29,18 +25,32 @@ static const uint64_t frequencies[] = {
 	//40000,
 };
 static const int8_t  num_frequencies = sizeof(frequencies) / sizeof(uint64_t);
-static const uint64_t gcd = 5000;
-static const uint64_t period = sampling_rate / gcd;
 
-static constexpr const uint64_t sine_wave_size = 200;
-static int32_t sin_buf[sine_wave_size];
-static int32_t cos_buf[sine_wave_size];
+static constexpr const uint64_t sine_wave_size = 64;
+
+static int16_t real_kern[num_frequencies][sine_wave_size][block_size];
+static int16_t imag_kern[num_frequencies][sine_wave_size][block_size];
 
 void init_process() {
+	int16_t sin_buf[sine_wave_size];
+	int16_t ncos_buf[sine_wave_size];
 	for (uint64_t i = 0; i < sine_wave_size; ++i) {
 		const float angle = 2 * M_PI * i / sine_wave_size;
-		sin_buf[i] = sin(angle) * B16;
-		cos_buf[i] = cos(angle) * B16;
+		sin_buf[i] = sin(angle) * B16 / 2;
+		ncos_buf[i] = -cos(angle) * B16 / 2;
+	}
+
+	for (uint8_t f = 0; f < num_frequencies; ++f) {
+		for (size_t j = 0; j < sine_wave_size; ++j) {
+			for (uint64_t i = 0; i < block_size; ++i) {
+				const uint64_t time = i * 1000000 / sampling_rate; // in uc
+				const uint64_t microrevs = frequencies[f] * time % 1000000; // angle = 2pi * microrevs / 1000000
+				const uint64_t wave_idx = microrevs * sine_wave_size / 1000000;
+				const uint64_t idx = (wave_idx + j) % sine_wave_size;
+				real_kern[f][j][i] = sin_buf[idx];
+				imag_kern[f][j][i] = ncos_buf[idx];
+			}
+		}
 	}
 }
 
@@ -56,21 +66,24 @@ static char out[1024];
 static const size_t len_out = sizeof(out) / sizeof(char);
 static uint64_t iter = 0;
 
-static constexpr const int32_t beta = B16 - alpha;
+int32_t dot(int16_t* pSrcA, int16_t* pSrcB);
 
-const char* process(const uint16_t* const in) {
+const char* process(int16_t (* const in)[block_size]) {
 	size_t out_idx = 0;
 	out[0] = '\0';
 
-	const uint64_t time = iter * 1000000 / sampling_rate; // in uc
+	const uint64_t time = iter * block_size * 1000000 / sampling_rate; // in uc
 
 	// dft for only the relevant frequencies
 	for (uint8_t f = 0; f < num_frequencies; ++f) {
 		const uint64_t microrevs = frequencies[f] * time % 1000000; // angle = 2pi * microrevs / 1000000
 		const uint64_t wave_idx = microrevs * sine_wave_size / 1000000;
 		for (uint8_t c = 0; c < num_channels; ++c) {
-			real[f][c] = (real[f][c] * alpha + signed_multiply_32x16b(sin_buf[wave_idx], in[c]) * beta) / B16;
-			imag[f][c] = (imag[f][c] * alpha - signed_multiply_32x16b(cos_buf[wave_idx], in[c]) * beta) / B16;
+			const int32_t real_part = dot(in[c], real_kern[f][wave_idx]);
+			const int32_t imag_part = dot(in[c], imag_kern[f][wave_idx]);
+
+			real[f][c] = signed_halving_add_16_and_16(real[f][c], real_part);
+			imag[f][c] = signed_halving_add_16_and_16(imag[f][c], imag_part);
 		}
 	}
 
@@ -126,4 +139,33 @@ const char* process(const uint16_t* const in) {
 
 	return out;
 }
+
+#ifdef KINETISK
+#include <arm_math.h>
+
+int32_t dot(int16_t* pSrcA, int16_t* pSrcB) {
+	int64_t result;
+
+	arm_dot_prod_q15(
+		pSrcA,
+		pSrcB,
+		block_size,
+		&result
+	);
+
+	return result / int32_t(block_size);
+}
+
+#else
+
+int32_t dot(int16_t* pSrcA, int16_t* pSrcB) {
+	int64_t result = 0;
+
+	for (size_t i = 0; i < block_size; ++i)
+		result += pSrcA[i] * pSrcB[i] / 16 / B8;
+
+	return result / int32_t(block_size);
+}
+
+#endif
 

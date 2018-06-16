@@ -9,7 +9,7 @@
 
 static uint64_t frequency = 30000;
 static int64_t coffset[] = {0, 7, -7, 5};
-static float noise = .01;
+static float noise = 1.;
 
 static constexpr const uint64_t sine_wave_size = 200;
 static float sin_buf[sine_wave_size];
@@ -23,33 +23,35 @@ void init_input() {
 
 double randn(double mu, double sigma);
 
-static uint16_t v[num_channels];
+static int16_t v[num_channels][block_size];
 static uint64_t iter = sampling_rate;
 
-const uint16_t* input() {
-	const uint64_t time = iter * 1000000 / sampling_rate; // in uc
-	const uint64_t time_offset = time % 2000000;
+int16_t (*input())[block_size] {
+	for (size_t block_idx = 0; block_idx < block_size; ++block_idx) {
+		const uint64_t time = iter * 1000000 / sampling_rate; // in uc
+		const uint64_t time_offset = time % 2000000;
 
-	if (0 <= time_offset && time_offset < 4000) {
-		for (uint8_t i = 0; i < num_channels; ++i) {
-			float value = 2 + sin_buf[(frequency * (time + coffset[i]) % 1000000) * sine_wave_size / 1000000] + randn(0, noise);
+		if (0 <= time_offset && time_offset < 4000) {
+			for (uint8_t i = 0; i < num_channels; ++i) {
+				float value = 2 + sin_buf[(frequency * (time + coffset[i]) % 1000000) * sine_wave_size / 1000000] + randn(0, noise);
 
-			if (value > 4) value = 4;
-			if (value < 0) value = 0;
+				if (value > 4) value = 4;
+				if (value < 0) value = 0;
 
-			v[i] = value / 4 * 4096;
+				v[i][block_idx] = value / 4 * 4096;
+			}
 		}
-	}
-	else {
-		for (uint8_t i = 0; i < num_channels; ++i) {
-			float value = 2 + randn(0, noise);
-			if (value > 4) value = 4;
-			if (value < 0) value = 0;
-			v[i] = value / 4 * 4096;
+		else {
+			for (uint8_t i = 0; i < num_channels; ++i) {
+				float value = 2 + randn(0, noise);
+				if (value > 4) value = 4;
+				if (value < 0) value = 0;
+				v[i][block_idx] = value / 4 * 4096;
+			}
 		}
-	}
 
-	++iter;
+		++iter;
+	}
 
 	return v;
 }

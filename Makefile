@@ -1,7 +1,8 @@
-UC_CMD = make -f teensy.mk INCLUDE_FLAGS="-Iinclude -IADC -DKINETISK" TEENSY=36 hex
+UC_CMD = make -f teensy.mk INCLUDE_FLAGS="-Iinclude -IADC -Iarm_math/src -DKINETISK" TEENSY=36 hex
 MC_CMD = g++ -Iinclude -g
 
-ADC_SOURCES := $(wildcard ADC/*.cpp)
+UC_CPP := $(wildcard ADC/*.cpp)
+UC_C := $(wildcard arm_math/src/*.c)
 
 all: uc mc
 
@@ -10,13 +11,13 @@ uc: bin/uc_phase_shift.hex bin/uc_raw.hex bin/uc_sim.hex
 mc: bin/mc_sim bin/mc_std bin/mc_byte
 
 bin/uc_phase_shift.hex: src/main.cpp src/input_adc.cpp src/process_phase_shift.cpp src/output_usb.cpp
-	${UC_CMD} CPP_FILES="$^ $(ADC_SOURCES)" TARGET=bin/uc_phase_shift
+	${UC_CMD} CPP_FILES="$^ $(UC_CPP)" C_FILES="$(UC_C)" TARGET=bin/uc_phase_shift
 
 bin/uc_raw.hex: src/main.cpp src/input_adc.cpp src/process_byte.cpp src/output_usb.cpp
-	${UC_CMD}  CPP_FILES="$^ $(ADC_SOURCES)" TARGET=bin/uc_raw
+	${UC_CMD}  CPP_FILES="$^ $(UC_CPP)" C_FILES="$(UC_C)" TARGET=bin/uc_raw
 
 bin/uc_sim.hex: src/main.cpp src/input_sim.cpp src/process_phase_shift.cpp src/output_usb.cpp
-	${UC_CMD}  CPP_FILES="$^ $(ADC_SOURCES)" TARGET=bin/uc_sim
+	${UC_CMD}  CPP_FILES="$^ $(UC_CPP)" C_FILES="$(UC_C)" TARGET=bin/uc_sim
 
 bin/mc_sim: src/main.cpp src/input_sim.cpp src/process_phase_shift.cpp src/output_stdout.cpp
 	${MC_CMD} $^ -o $@

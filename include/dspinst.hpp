@@ -216,9 +216,13 @@ static inline int32_t signed_subtract_16_and_16(int32_t a, int32_t b)
 static inline int32_t signed_halving_add_16_and_16(int32_t a, int32_t b) __attribute__((always_inline, unused));
 static inline int32_t signed_halving_add_16_and_16(int32_t a, int32_t b)
 {
+#if defined(KINETISK)
 	int32_t out;
 	asm volatile("shadd16 %0, %1, %2" : "=r" (out) : "r" (a), "r" (b));
 	return out;
+#else
+	return (a + b) / 2;
+#endif
 }
 
 // computes out = (((a[31:16]-b[31:16])/2) <<16) | ((a[15:0]-b[15:0])/2)
