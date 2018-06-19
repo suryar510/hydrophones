@@ -34,6 +34,7 @@ void init_input() {
 		adc->setResolution(12);
 		adc->setConversionSpeed(ADC_CONVERSION_SPEED::HIGH_SPEED);
 		adc->setSamplingSpeed(SPEED);
+		adc->enableInterrupts(ADC_0);
 		adc->startContinuous(pin[0], ADC_0);
 	}
 
@@ -48,7 +49,7 @@ void init_input() {
 	delay(500);
 }
 
-static int16_t buffer[2][num_channels][block_size];
+static int16_t buffer[2][num_channels][block_size] __attribute__ ((aligned (128)));
 
 static volatile size_t which_buffer = 0;
 static volatile size_t buffer_idx = 0;
@@ -64,6 +65,7 @@ int16_t (*input())[block_size] {
 void adc0_isr() {
 	if (num_channels >= 1) buffer[which_buffer][0][buffer_idx] = adc->analogReadContinuous(ADC_0);
 	if (num_channels >= 2) buffer[which_buffer][1][buffer_idx] = adc->analogReadContinuous(ADC_1);
+	// TODO: do something with adc->isComplete(ADC_0)
 	if (num_channels == 3) {
 		buffer[which_buffer][2][buffer_idx] = adc->analogRead(pin[2]);
 	} else if (num_channels == 4) {

@@ -28,8 +28,8 @@ static const int8_t  num_frequencies = sizeof(frequencies) / sizeof(uint64_t);
 
 static constexpr const uint64_t sine_wave_size = 64;
 
-static int16_t real_kern[num_frequencies][sine_wave_size][block_size];
-static int16_t imag_kern[num_frequencies][sine_wave_size][block_size];
+static int16_t real_kern[num_frequencies][sine_wave_size][block_size] __attribute__ ((aligned (64)));
+static int16_t imag_kern[num_frequencies][sine_wave_size][block_size] __attribute__ ((aligned (64)));
 
 void init_process() {
 	int16_t sin_buf[sine_wave_size];
@@ -66,7 +66,51 @@ static char out[1024];
 static const size_t len_out = sizeof(out) / sizeof(char);
 static uint64_t iter = 0;
 
-int32_t dot(int16_t* pSrcA, int16_t* pSrcB);
+#ifdef KINETISK
+#include <arm_math.h>
+
+constexpr int32_t floorlog2(int32_t x)
+{
+    return x == 1 ? 0 : 1+floorlog2(x >> 1);
+}
+
+constexpr int32_t ceillog2(int32_t x)
+{
+    return x == 1 ? 0 : floorlog2(x - 1) + 1;
+}
+
+static inline int32_t dot(int16_t* pSrcA, int16_t* pSrcB) {
+	int64_t result = 0;
+
+	static_assert(block_size % 2 == 0, "need even block size");
+
+	uint32_t offset = block_size * 2;
+
+	while (offset > 0) {
+		offset -= 4;
+
+		uint32_t a, b;
+		__ASM volatile ("ldr %0, [%1, %2]" : "=r" (a) : "r" (pSrcA), "r" (offset));
+		__ASM volatile ("ldr %0, [%1, %2]" : "=r" (b) : "r" (pSrcB), "r" (offset));
+		__ASM volatile ("smlald %Q0, %R0, %1, %2" : "+r" (result) : "r" (a), "r" (b));
+	}
+
+	return result / int32_t(block_size);
+}
+
+#else
+
+static inline int32_t dot(int16_t* pSrcA, int16_t* pSrcB) {
+	int64_t result = 0;
+
+	for (size_t i = 0; i < block_size; ++i)
+		result += pSrcA[i] * pSrcB[i] / 16 / B8;
+
+	return result / int32_t(block_size);
+}
+
+#endif
+
 
 const char* process(int16_t (* const in)[block_size]) {
 	size_t out_idx = 0;
@@ -139,33 +183,4 @@ const char* process(int16_t (* const in)[block_size]) {
 
 	return out;
 }
-
-#ifdef KINETISK
-#include <arm_math.h>
-
-int32_t dot(int16_t* pSrcA, int16_t* pSrcB) {
-	int64_t result;
-
-	arm_dot_prod_q15(
-		pSrcA,
-		pSrcB,
-		block_size,
-		&result
-	);
-
-	return result / int32_t(block_size);
-}
-
-#else
-
-int32_t dot(int16_t* pSrcA, int16_t* pSrcB) {
-	int64_t result = 0;
-
-	for (size_t i = 0; i < block_size; ++i)
-		result += pSrcA[i] * pSrcB[i] / 16 / B8;
-
-	return result / int32_t(block_size);
-}
-
-#endif
 
