@@ -1,4 +1,4 @@
-UC_CMD = make -f teensy.mk INCLUDE_FLAGS="-Iinclude -IADC -Iarm_math/src -DKINETISK" TEENSY=36 hex
+UC_CMD = make -f teensy.mk INCLUDE_FLAGS="-Iinclude -IADC -Iarm_math/src -DKINETISK" TEENSY=36 hex TEENSY_CORE_SPEED=240000000
 MC_CMD = g++ -Iinclude -g
 
 UC_CPP := $(wildcard ADC/*.cpp)
