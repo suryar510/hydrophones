@@ -68,16 +68,7 @@ static uint64_t iter = 0;
 
 #ifdef KINETISK
 #include <arm_math.h>
-
-constexpr int32_t floorlog2(int32_t x)
-{
-    return x == 1 ? 0 : 1+floorlog2(x >> 1);
-}
-
-constexpr int32_t ceillog2(int32_t x)
-{
-    return x == 1 ? 0 : floorlog2(x - 1) + 1;
-}
+#endif
 
 static inline int32_t dot(int16_t* pSrcA, int16_t* pSrcB) {
 	int64_t result = 0;
@@ -88,29 +79,25 @@ static inline int32_t dot(int16_t* pSrcA, int16_t* pSrcB) {
 
 	while (offset > 0) {
 		offset -= 4;
+		union {
+			uint32_t uint32;
+			int16_t int16[2];
+		} a, b;
 
-		uint32_t a, b;
-		__ASM volatile ("ldr %0, [%1, %2]" : "=r" (a) : "r" (pSrcA), "r" (offset));
-		__ASM volatile ("ldr %0, [%1, %2]" : "=r" (b) : "r" (pSrcB), "r" (offset));
+#ifdef KINETISK
+		__ASM volatile ("ldr %0, [%1, %2]" : "=r" (a.uint32) : "r" (pSrcA), "r" (offset));
+		__ASM volatile ("ldr %0, [%1, %2]" : "=r" (b.uint32) : "r" (pSrcB), "r" (offset));
 		__ASM volatile ("smlald %Q0, %R0, %1, %2" : "+r" (result) : "r" (a), "r" (b));
-	}
-
-	return result / int32_t(block_size);
-}
-
 #else
-
-static inline int32_t dot(int16_t* pSrcA, int16_t* pSrcB) {
-	int64_t result = 0;
-
-	for (size_t i = 0; i < block_size; ++i)
-		result += pSrcA[i] * pSrcB[i] / 16 / B8;
-
-	return result / int32_t(block_size);
-}
-
+		a.uint32 = ((uint32_t*)pSrcA)[offset >> 2];
+		b.uint32 = ((uint32_t*)pSrcB)[offset >> 2];
+		result += int64_t(a.int16[0] * b.int16[0]) + a.int16[1] * b.int16[1];
 #endif
 
+	}
+
+	return result / int32_t(block_size) / 16 / B8;
+}
 
 const char* process(int16_t (* const in)[block_size]) {
 	size_t out_idx = 0;
