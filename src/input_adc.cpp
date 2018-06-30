@@ -44,6 +44,8 @@ void init_input() {
 		adc->enableInterrupts(ADC_1);
 	}
 
+	static_assert(num_channels >= 2, "need at least 2 channels");
+    adc->startSynchronizedContinuous(pin[0], pin[1]);
     timer.begin(timer_callback, int32_t(1000000 / sampling_rate));
 
 	delay(100);
@@ -62,39 +64,24 @@ int16_t (*input())[block_size] {
 	return buffer[1 - which_buffer];
 }
 
-void take_measurement(uint8_t);
-
 void timer_callback() {
-	take_measurement(0);
-	take_measurement(1);
-}
+	const ADC::Sync_result result = adc->readSynchronizedContinuous();
+	buffer[which_buffer][0][buffer_idx] = result.result_adc0;
+	buffer[which_buffer][1][buffer_idx] = result.result_adc1;
+	for (size_t i = 2; i < num_channels; ++i)
+		buffer[which_buffer][i][buffer_idx] = result.result_adc1;
 
-static uint8_t curr_channel[2] = {};
-
-void take_measurement(uint8_t channel) {
-	if (channel == num_channels) {
-		++buffer_idx;
-		if (buffer_idx >= block_size) {
-			has_data = true;
-			buffer_idx = 0;
-			which_buffer = 1 - which_buffer;
-		}
+	++buffer_idx;
+	if (buffer_idx >= block_size) {
+		has_data = true;
+		buffer_idx = 0;
+		which_buffer = 1 - which_buffer;
 	}
-	if (channel >= num_channels) return;
-
-	adc->startSingleRead(pin[channel], channel % 2 ? ADC_1 : ADC_0);
-	curr_channel[channel % 2] = channel;
 }
 
 void adc0_isr() {
-	const uint8_t channel = curr_channel[0];
-	buffer[which_buffer][channel][buffer_idx] = adc->analogReadContinuous(ADC_0);
-	take_measurement(channel + 2);
 }
 
 void adc1_isr() {
-	const uint8_t channel = curr_channel[1];
-	buffer[which_buffer][channel][buffer_idx] = adc->analogReadContinuous(ADC_1);
-	take_measurement(channel + 2);
 }
 
