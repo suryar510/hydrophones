@@ -66,10 +66,6 @@ static char out[1024];
 static const size_t len_out = sizeof(out) / sizeof(char);
 static uint64_t iter = 0;
 
-#ifdef KINETISK
-#include <arm_math.h>
-#endif
-
 static inline int32_t dot(int16_t* pSrcA, int16_t* pSrcB) {
 	int64_t result = 0;
 
@@ -84,14 +80,14 @@ static inline int32_t dot(int16_t* pSrcA, int16_t* pSrcB) {
 			int16_t int16[2];
 		} a, b;
 
-#ifdef KINETISK
-		__ASM volatile ("ldr %0, [%1, %2]" : "=r" (a.uint32) : "r" (pSrcA), "r" (offset));
-		__ASM volatile ("ldr %0, [%1, %2]" : "=r" (b.uint32) : "r" (pSrcB), "r" (offset));
-		__ASM volatile ("smlald %Q0, %R0, %1, %2" : "+r" (result) : "r" (a), "r" (b));
+#ifdef TEENSY_ASM
+		__asm volatile ("ldr %0, [%1, %2]" : "=r" (a.uint32) : "r" (pSrcA), "r" (offset));
+		__asm volatile ("ldr %0, [%1, %2]" : "=r" (b.uint32) : "r" (pSrcB), "r" (offset));
+		__asm volatile ("smlald %Q0, %R0, %1, %2" : "+r" (result) : "r" (a), "r" (b));
 #else
 		a.uint32 = ((uint32_t*)pSrcA)[offset >> 2];
 		b.uint32 = ((uint32_t*)pSrcB)[offset >> 2];
-		result += int64_t(a.int16[0] * b.int16[0]) + a.int16[1] * b.int16[1];
+		result += int64_t(int64_t(a.int16[0]) * b.int16[0]) + int64_t(a.int16[1]) * b.int16[1];
 #endif
 
 	}
