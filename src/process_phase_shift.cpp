@@ -5,6 +5,8 @@
 #include <stdio.h>
 #include <string.h>
 
+#include <Arduino.h>
+
 #include "global.hpp"
 #include "fxpt_atan2.hpp"
 #include "dspinst.hpp"
@@ -100,8 +102,23 @@ const char* process(int16_t (* const in)[block_size]) {
 	out[0] = '\0';
 
 	const uint64_t time = iter * block_size * 1000000 / sampling_rate; // in uc
-
-	// dft for only the relevant frequencies
+/*	
+	if ( time % 10000 < 10){
+		for(int x = 0; x < 4; x++){
+			Serial.print(in[x][0]);
+			Serial.print(" ");
+		}
+		Serial.println();
+	}
+*/
+/*	if ( time % 1000000 < 100){
+		Serial.println(int32_t(time - micros()));
+		
+		Serial.print(" ");
+		Serial.println(uint32_t(micros()));
+		
+	}
+*/	// dft for only the relevant frequencies
 	for (uint8_t f = 0; f < num_frequencies; ++f) {
 		const uint64_t microrevs = frequencies[f] * time % 1000000; // angle = 2pi * microrevs / 1000000
 		const uint64_t wave_idx = microrevs * sine_wave_size / 1000000;
@@ -109,8 +126,10 @@ const char* process(int16_t (* const in)[block_size]) {
 			const int32_t real_part = dot(in[c], real_kern[f][wave_idx]);
 			const int32_t imag_part = dot(in[c], imag_kern[f][wave_idx]);
 
-			real[f][c] = signed_halving_add_16_and_16(real[f][c], real_part);
-			imag[f][c] = signed_halving_add_16_and_16(imag[f][c], imag_part);
+			real[f][c] = (real[f][c] + real_part)/2;//signed_halving_add_16_and_16(real[f][c], real_part);
+			imag[f][c] = (imag[f][c] + imag_part)/2;//signed_halving_add_16_and_16(imag[f][c], imag_part);
+
+			//Serial.println(real[f][c]);
 		}
 	}
 
@@ -127,6 +146,8 @@ const char* process(int16_t (* const in)[block_size]) {
 				if (amplitude < min_amplitude) min_amplitude = amplitude;
 			}
 
+//			min_amplitude = uint64_t(real[f][2] * real[f][2]) + uint64_t(imag[f][2] * imag[f][2]);
+
 			if (min_amplitude > max_amplitude[f]) {
 				max_amplitude[f] = min_amplitude;
 				max_time[f] = time;
@@ -136,6 +157,7 @@ const char* process(int16_t (* const in)[block_size]) {
 
 			// if highest in time window, report
 			if (time - max_time[f] >= window && max_amplitude[f] >= threshold) {
+				int64_t time_diffs[num_channels] = {0};
 				const uint32_t base_phase = fxpt_atan2(max_imag[f][0], max_real[f][0]);
 				out_idx += snprintf(out + out_idx, len_out - out_idx, "%" PRIu64 "\t", frequencies[f]);
 				for (uint8_t c = 1; c < num_channels; ++c) {
@@ -146,10 +168,19 @@ const char* process(int16_t (* const in)[block_size]) {
 					if (phase_shift >= B16 / 2) phase_shift -= B16;
 
 					const int64_t time_diff = int64_t(phase_shift) * 1000000000 / B16 / int64_t(frequencies[f]); // in nanos
+					time_diffs[c] = time_diff;
 
 					out_idx += snprintf(out + out_idx, len_out - out_idx, "%" PRId64 "\t", time_diff);
 				}
 				out_idx += snprintf(out + out_idx, len_out - out_idx, "%" PRIu64 "\n", max_amplitude[f]);
+
+				out_idx += snprintf(out + out_idx, len_out - out_idx, "%" PRId64 "\n",
+					int64_t(atan2(
+						float(time_diffs[0] - time_diffs[2]),
+						float(time_diffs[1] - time_diffs[2])
+					) / (2 * M_PI) * 360)
+				);
+				
 
 				max_amplitude[f] = 0;
 				max_time[f] = time;
