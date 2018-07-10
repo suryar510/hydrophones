@@ -12,8 +12,6 @@ static IntervalTimer timer;
 // A16 (green) and A17 (broken blue) are read by ADC1
 const int base_pins[] = {A14, A15, A16, A17};
 
-
-
 void timer_callback();
 
 void init_input() {
@@ -34,8 +32,6 @@ void init_input() {
 		adc->setConversionSpeed(ADC_CONVERSION_SPEED::VERY_HIGH_SPEED, ADC_1);
 		adc->setSamplingSpeed(ADC_SAMPLING_SPEED::VERY_HIGH_SPEED, ADC_1);
 	}
-
-	//adc->startSynchronizedContinuous(base_pins[0], base_pins[2]);
 	timer.begin(timer_callback, int32_t(1000000 / sampling_rate));
 }
 
@@ -57,21 +53,16 @@ void timer_callback() {
 
 	onsecondread = false;
 }
-//int time = 0;
 void adc0_isr() {
 	if(!onsecondread){
 		ADC::Sync_result result = adc->readSynchronizedSingle();
 		buffer[which_buffer][0][buffer_idx] = result.result_adc0;
 		buffer[which_buffer][2][buffer_idx] = result.result_adc1;
 
-		adc->startSynchronizedSingleRead(base_pins[1], base_pins[3]);
-//		time = micros();
+		adc->adc0->startReadFast(base_pins[1]);
 		onsecondread = true;
 	} else {
-//		Serial.println(micros() - time);
-		ADC::Sync_result result = adc->readSynchronizedSingle();
-		buffer[which_buffer][1][buffer_idx] = result.result_adc0;
-		//buffer[which_buffer][3][buffer_idx] = result.result_adc0;
+		buffer[which_buffer][1][buffer_idx] = adc->adc0->readSingle();
 
 		++buffer_idx;
 		if (buffer_idx >= block_size) {

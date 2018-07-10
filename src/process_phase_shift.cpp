@@ -104,21 +104,17 @@ const char* process(int16_t (* const in)[block_size]) {
 	const uint64_t time = iter * block_size * 1000000 / sampling_rate; // in uc
 /*	
 	if ( time % 10000 < 10){
-		for(int x = 0; x < 4; x++){
+		for(int x = 0; x < 3; x++){
 			Serial.print(in[x][0]);
 			Serial.print(" ");
 		}
 		Serial.println();
 	}
 */
-/*	if ( time % 1000000 < 100){
+	if ( time % 1000000 < 100){
 		Serial.println(int32_t(time - micros()));
-		
-		Serial.print(" ");
-		Serial.println(uint32_t(micros()));
-		
 	}
-*/	// dft for only the relevant frequencies
+	// dft for only the relevant frequencies
 	for (uint8_t f = 0; f < num_frequencies; ++f) {
 		const uint64_t microrevs = frequencies[f] * time % 1000000; // angle = 2pi * microrevs / 1000000
 		const uint64_t wave_idx = microrevs * sine_wave_size / 1000000;
@@ -128,8 +124,6 @@ const char* process(int16_t (* const in)[block_size]) {
 
 			real[f][c] = (real[f][c] + real_part)/2;//signed_halving_add_16_and_16(real[f][c], real_part);
 			imag[f][c] = (imag[f][c] + imag_part)/2;//signed_halving_add_16_and_16(imag[f][c], imag_part);
-
-			//Serial.println(real[f][c]);
 		}
 	}
 
@@ -145,8 +139,6 @@ const char* process(int16_t (* const in)[block_size]) {
 				const uint64_t amplitude = uint64_t(real[f][c] * real[f][c]) + uint64_t(imag[f][c] * imag[f][c]);
 				if (amplitude < min_amplitude) min_amplitude = amplitude;
 			}
-
-//			min_amplitude = uint64_t(real[f][2] * real[f][2]) + uint64_t(imag[f][2] * imag[f][2]);
 
 			if (min_amplitude > max_amplitude[f]) {
 				max_amplitude[f] = min_amplitude;
@@ -178,10 +170,9 @@ const char* process(int16_t (* const in)[block_size]) {
 					int64_t(atan2(
 						float(time_diffs[0] - time_diffs[2]),
 						float(time_diffs[1] - time_diffs[2])
-					) / (2 * M_PI) * 360)
+					) / (2 * M_PI) * 360) + 180
 				);
 				
-
 				max_amplitude[f] = 0;
 				max_time[f] = time;
 
