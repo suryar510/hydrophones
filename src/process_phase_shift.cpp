@@ -21,8 +21,8 @@ static constexpr const uint64_t window = 1996000; // in us
 static constexpr const uint32_t threshold = 0;
 
 static const uint64_t frequencies[] = {
-	//25000,
-	30000,
+	25000
+	//30000,
 	//35000,
 	//40000,
 };
@@ -32,6 +32,8 @@ static constexpr const uint64_t sine_wave_size = 64;
 
 static int16_t real_kern[num_frequencies][sine_wave_size][block_size] __attribute__ ((aligned (64)));
 static int16_t imag_kern[num_frequencies][sine_wave_size][block_size] __attribute__ ((aligned (64)));
+
+static int32_t max_volt[num_channels] = {0};
 
 void init_process() {
 	int16_t sin_buf[sine_wave_size];
@@ -102,7 +104,14 @@ const char* process(int16_t (* const in)[block_size]) {
 	out[0] = '\0';
 
 	const uint64_t time = iter * block_size * 1000000 / sampling_rate; // in uc
-/*	
+/*	for(int y = 0; y < block_size; y++){
+		for(int x = 0; x < 3; x++){
+			if(in[x][y] > max_volt[x]){
+				max_volt[x] = in[x][y];
+			}
+		}
+	}
+*//*	
 	if ( time % 10000 < 10){
 		for(int x = 0; x < 3; x++){
 			Serial.print(in[x][0]);
@@ -111,10 +120,10 @@ const char* process(int16_t (* const in)[block_size]) {
 		Serial.println();
 	}
 */
-	if ( time % 1000000 < 100){
+/*	if ( time % 1000000 < 100){
 		Serial.println(int32_t(time - micros()));
 	}
-	// dft for only the relevant frequencies
+*/	// dft for only the relevant frequencies
 	for (uint8_t f = 0; f < num_frequencies; ++f) {
 		const uint64_t microrevs = frequencies[f] * time % 1000000; // angle = 2pi * microrevs / 1000000
 		const uint64_t wave_idx = microrevs * sine_wave_size / 1000000;
@@ -129,6 +138,13 @@ const char* process(int16_t (* const in)[block_size]) {
 
 	// find time for which the minimum amplitude is highest
 	if (time > window) {
+		/*
+		for(int x = 0; x < 3; x++){
+			Serial.print(max_volt[x]);
+			Serial.print('\t');
+		}
+		Serial.println();
+		*/
 		for (uint8_t f = 0; f < num_frequencies; ++f) {
 			// handle overflow
 			// should happen rarely
@@ -164,13 +180,13 @@ const char* process(int16_t (* const in)[block_size]) {
 
 					out_idx += snprintf(out + out_idx, len_out - out_idx, "%" PRId64 "\t", time_diff);
 				}
-				out_idx += snprintf(out + out_idx, len_out - out_idx, "%" PRIu64 "\n", max_amplitude[f]);
+				out_idx += snprintf(out + out_idx, len_out - out_idx, "%" PRIu64 "\t", max_amplitude[f]);
 
 				out_idx += snprintf(out + out_idx, len_out - out_idx, "%" PRId64 "\n",
 					int64_t(atan2(
-						float(time_diffs[0] - time_diffs[2]),
-						float(time_diffs[1] - time_diffs[2])
-					) / (2 * M_PI) * 360) + 180
+						float(time_diffs[2]-time_diffs[1]),
+						float(2*time_diffs[2] -(time_diffs[2]-time_diffs[1]))
+					) / (2 * M_PI) * 360)
 				);
 				
 				max_amplitude[f] = 0;
