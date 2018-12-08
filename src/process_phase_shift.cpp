@@ -3,9 +3,10 @@
 #include <math.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <Arduino.h>
 #include <string.h>
 
-#include <Arduino.h>
+//#include <Arduino.h>
 
 #include "global.hpp"
 #include "fxpt_atan2.hpp"
@@ -17,18 +18,18 @@
 static constexpr const int16_t B8 = 1 << 8;
 static constexpr const int32_t B16 = 1 << 16;
 
-static constexpr const uint64_t window = 1996000; // in us
-static constexpr const uint32_t threshold = 0;
+static constexpr const uint64_t window = 2900000; // in us
+static constexpr const uint32_t threshold = 1000;
 
 static const uint64_t frequencies[] = {
-	25000
+//	25000
 	//30000,
-	//35000,
-	//40000,
+	35000,
+//    40000,
 };
 static const int8_t  num_frequencies = sizeof(frequencies) / sizeof(uint64_t);
 
-static constexpr const uint64_t sine_wave_size = 64;
+static constexpr const uint64_t sine_wave_size = 128;
 
 static int16_t real_kern[num_frequencies][sine_wave_size][block_size] __attribute__ ((aligned (64)));
 static int16_t imag_kern[num_frequencies][sine_wave_size][block_size] __attribute__ ((aligned (64)));
@@ -40,25 +41,28 @@ void init_process() {
 	int16_t ncos_buf[sine_wave_size];
 	for (uint64_t i = 0; i < sine_wave_size; ++i) {
 		const float angle = 2 * M_PI * i / sine_wave_size;
-		sin_buf[i] = sin(angle) * B16 / 2;
-		ncos_buf[i] = -cos(angle) * B16 / 2;
+		sin_buf[i] = -sin(angle) * B16 / 4;
+		ncos_buf[i] = cos(angle) * B16 / 4;
 	}
 
 	for (uint8_t f = 0; f < num_frequencies; ++f) {
 		for (size_t j = 0; j < sine_wave_size; ++j) {
-			for (uint64_t i = 0; i < block_size; ++i) {
+	for (uint64_t i = 0; i < block_size; ++i) {
 				const uint64_t time = i * 1000000 / sampling_rate; // in uc
 				const uint64_t microrevs = frequencies[f] * time % 1000000; // angle = 2pi * microrevs / 1000000
 				const uint64_t wave_idx = microrevs * sine_wave_size / 1000000;
 				const uint64_t idx = (wave_idx + j) % sine_wave_size;
-				real_kern[f][j][i] = sin_buf[idx];
-				imag_kern[f][j][i] = ncos_buf[idx];
+				real_kern[f][j][i] = ncos_buf[idx];
+				imag_kern[f][j][i] = sin_buf[idx];
 			}
 		}
 	}
 }
 
 static uint64_t max_amplitude[num_frequencies] = {}; // the highest recently observed amplitude
+static uint64_t am1 = 0;
+static uint64_t am2 = 0;
+static uint64_t am3 = 0;
 static uint64_t max_time[num_frequencies] = {}; // the time of the highest observed amplitude
 static int32_t max_real[num_frequencies][num_channels] = {};
 static int32_t max_imag[num_frequencies][num_channels] = {};
@@ -131,8 +135,10 @@ const char* process(int16_t (* const in)[block_size]) {
 			const int32_t real_part = dot(in[c], real_kern[f][wave_idx]);
 			const int32_t imag_part = dot(in[c], imag_kern[f][wave_idx]);
 
-			real[f][c] = (real[f][c] + real_part)/2;//signed_halving_add_16_and_16(real[f][c], real_part);
-			imag[f][c] = (imag[f][c] + imag_part)/2;//signed_halving_add_16_and_16(imag[f][c], imag_part);
+			//real[f][c] = (real[f][c] + real_part)/2;//signed_halving_add_16_and_16(real[f][c], real_part);
+			//imag[f][c] = (imag[f][c] + imag_part)/2;//signed_halving_add_16_and_16(imag[f][c], imag_part);
+			real[f][c] = real_part;//signed_halving_add_16_and_16(real[f][c], real_part);
+			imag[f][c] = imag_part;//signed_halving_add_16_and_16(imag[f][c], imag_part);
 		}
 	}
 
@@ -149,19 +155,33 @@ const char* process(int16_t (* const in)[block_size]) {
 			// handle overflow
 			// should happen rarely
 			if (time < max_time[f]) max_time[f] = 0;
-
+            uint64_t tmp1=0,tmp2=0,tmp3=0;
 			uint64_t min_amplitude = -1;
 			for (uint8_t c = 0; c < num_channels; ++c) {
 				const uint64_t amplitude = uint64_t(real[f][c] * real[f][c]) + uint64_t(imag[f][c] * imag[f][c]);
-				if (amplitude < min_amplitude) min_amplitude = amplitude;
+				if (amplitude < min_amplitude){
+                    min_amplitude = amplitude;
+                }                
+                if(c==0){
+                    tmp1 = amplitude;
+                }
+                if(c==1){
+                    tmp2 = amplitude;
+                 }
+                if (c==2){
+                    tmp3 = amplitude;
+                }
 			}
 
-			if (min_amplitude > max_amplitude[f]) {
+			if (min_amplitude >  max_amplitude[f]) {
 				max_amplitude[f] = min_amplitude;
 				max_time[f] = time;
 				memcpy(max_real[f], real[f], sizeof(real[f]));
 				memcpy(max_imag[f], imag[f], sizeof(imag[f]));
-			}
+            }
+            if (tmp1 > threshold && am1 == 0)am1 = iter;
+            if (tmp2 > threshold && am2 == 0)am2 = iter;
+            if (tmp3 > threshold && am3 == 0)am3 = iter;
 
 			// if highest in time window, report
 			if (time - max_time[f] >= window && max_amplitude[f] >= threshold) {
@@ -188,8 +208,16 @@ const char* process(int16_t (* const in)[block_size]) {
 						float(2*time_diffs[2] -(time_diffs[2]-time_diffs[1]))
 					) / (2 * M_PI) * 360)
 				);
-				
+                Serial.print(uint32_t(am1));
+                Serial.print(" ");
+                Serial.print(uint32_t(am2));
+                Serial.print(" ");
+                Serial.println(uint32_t(am3));
+
 				max_amplitude[f] = 0;
+                am1 = 0;
+                am2 = 0;
+                am3 = 0;
 				max_time[f] = time;
 
 				for (uint8_t c = 0; c < num_channels; ++c) {

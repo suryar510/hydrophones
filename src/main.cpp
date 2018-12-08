@@ -1,5 +1,5 @@
 #include <stdint.h>
-
+#include <Arduino.h>
 #include "global.hpp"
 
 void init_input();
@@ -11,6 +11,8 @@ const char* process(int16_t (* const in)[block_size]);
 void output(const char* const out);
 
 int main() {
+    pinMode(13, OUTPUT);
+    digitalWrite(13,HIGH);
 	init_input();
 	init_process();
 	init_output();
